@@ -1,0 +1,26 @@
+body{
+    /* display: flex;
+    justify-content: center; */
+    
+    height: 100vh;
+
+    background-color: #e5e6f2;
+    color: #323250;
+    font-family: Arial, sans-serif;
+}
+
+.suggest-card{
+    padding: 15px;
+    cursor: pointer;
+}
+.AI-response-message{
+   text-align: left;
+   max-width: 50%;
+}
+.user-response-message{
+    text-align: right;
+    max-width: 50%;
+    padding: 10px 50px;
+    margin: 10px;
+
+}
