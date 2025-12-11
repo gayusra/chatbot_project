@@ -1,117 +1,93 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
-import Lottie from 'lottie-react'
-import chatbotAnimation from './assets/chatbot_ai.json'
-import axios from 'axios'
+// src/App.jsx
+import React, { useEffect, useRef, useState } from "react";
+import axios from "axios";
+import Lottie from "lottie-react";
+import chatbotAnimation from "./assets/chatbot_ai.json";
+import "./App.css";
 
-function App() {
+export default function App() {
+  const [messages, setMessages] = useState([]); // {id, sender: 'user'|'ai', text, time}
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef();
 
-  const ai_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AIzaSyBeM1XHc1e4s3StI3GFT4ypms7JU1xosEQ"
-  const [suggestions, setSuggestions] = useState([
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
 
-    "What is AI?",
-    "What is React.js",
-    "what is javascript?",
+  const addMessage = (m) => setMessages(prev => [...prev, { ...m, id: Date.now().toString() }]);
 
-  ])
+  const sendToBackend = async (text) => {
+    setLoading(true);
+    try {
+      // Call your backend (relative URL works in dev if proxy is set or if server runs on same host)
+      const resp = await axios.post("/api/generate", {
+        contents: [{ parts: [{ text }] }]
+      });
+      // adapt to the shape your backend returns; here we expect resp.data.result ...
+      const aiText = resp?.data?.result?.candidates?.[0]?.content?.parts?.[0]?.text
+        || resp?.data?.result?.response
+        || "No valid reply from AI";
+      addMessage({ sender: "ai", text: aiText, time: new Date().toLocaleTimeString() });
+    } catch (err) {
+      console.error(err);
+      addMessage({ sender: "ai", text: "Error: cannot reach AI. See console.", time: new Date().toLocaleTimeString() });
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const [messages, setMessages] = useState([])
-  
-  const [input, setInput] = useState('')
+  const handleSend = () => {
+    const t = input.trim();
+    if (!t || loading) return;
+    addMessage({ sender: "user", text: t, time: new Date().toLocaleTimeString() });
+    setInput("");
+    sendToBackend(t);
+  };
 
-  const handleSubmit = async() =>{
-     let usermessage = {sender:"user", text: input}
-     setMessages([...messages, usermessage])
-
-     try{
-       const response =  await axios.post(ai_url,{
-         contents:[{
-           parts:[{"text": input}]
-         }]
-       })
-
-       if(response.data){
-        let aimessage = {sender:'AI',text:response.data.candidates[0].content.parts[0].text}
-       setMessages(prev => [...prev,aimessage])
-       
-       }
-
-       setInput('')
-       console.log(response.data)
-     }catch(err){ 
-        let errormessage = {sender:'AI',text:'Sorry, something went wrong! Please try again later.'}
-        setMessages(prev => [...prev,errormessage])
-     }
-  }
-
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
 
   return (
-    <>
-      <div className='vh-100'>
+    <div className="chat-app">
+      <div className="chat-card">
+        <div className="chat-header">
+          <div className="title">Chat with AI</div>
+          <Lottie animationData={chatbotAnimation} style={{ width: 100 }} />
+        </div>
 
-
-        <div className='container h-100'>
-          <div className='card border-0 shadow-sm bg-transparent h-100' >
-            <div className='card-body'>
-              <div className='d-flex justify-content-center align-items-center'>
-                <div className='my-4'>
-                  <Lottie animationData={chatbotAnimation} loop={true} style={{ width: '10rem' }} />
-                </div>
+        <div className="chat-window" ref={scrollRef}>
+          {messages.length === 0 && <div className="empty">Say hi 👋</div>}
+          {messages.map(m => (
+            <div key={m.id} className={`bubble-row ${m.sender === "user" ? "right" : "left"}`}>
+              {m.sender === "ai" && <div className="avatar">AI</div>}
+              <div className={`bubble ${m.sender === "user" ? "bubble-user" : "bubble-ai"}`}>
+                <div className="bubble-text">{m.text}</div>
+                <div className="bubble-meta">{m.time}</div>
               </div>
-
-              <div className='row row-cols-4'>
-                {
-                  suggestions.map((suggestion, index) => (
-                    <div className='col'>
-                      <div className='card border-0 shadow-sm suggest-card h-100'>
-                        <div className='card-body d-flex justify-content-center align-items-center'>
-
-                          <p className='card-text'>{suggestion}</p>
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                  ))
-                }
-              </div>
-
-               {
-                messages.length > 0?
-                <>
-                 {
-                  messages.map((suggestion,index)=>{
-                    return(
-                     <div className={`${suggestion.sender}-response-message`}>
-
-                     </div>
-                    )
-                  })
-                 }
-                </>:null
-               }
-
-
+              {m.sender === "user" && <div className="avatar user">You</div>}
             </div>
-            <div className='card-footer'>
-              <div className='input-group'>
-                <input type="text" className='form-control' placeholder='Ask me anything' value={input} onChange={(e)=>setInput(e.target.value)}/>
-                <button className='btn btn-primary' onClick={handleSubmit}>Send</button>
+          ))}
+        </div>
 
-              </div>
-
-            </div>
-
-          </div>
-
+        <div className="chat-input">
+          <textarea
+            rows={1}
+            placeholder="Type a message..."
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={loading}
+          />
+          <button onClick={handleSend} disabled={loading || !input.trim()}>
+            {loading ? "Sending..." : "Send"}
+          </button>
         </div>
       </div>
-    </>
-  )
+    </div>
+  );
 }
-
-export default App
